@@ -2,11 +2,12 @@ from pathlib import Path
 from time import perf_counter
 
 import numpy as np
+import pandas as pd
 import torch
 from torch import nn
 from sklearn.datasets import load_wine
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 from sklearn.model_selection import KFold, cross_val_score, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -139,13 +140,35 @@ def validate_torch(X, y):
     return scores, scores.mean(), scores.std()
 
 
+def metric_summary(y_true, predictions):
+    precision, recall, f1, _ = precision_recall_fscore_support(
+        y_true, predictions, average="macro", zero_division=0
+    )
+    return precision, recall, f1
+
+
+def save_comparison(rows, sklearn_scores, torch_scores):
+    """Zapisuje tabelę wyników obu modeli."""
+    table = pd.DataFrame(rows)
+    report = (
+        "PORÓWNANIE MODELI - ZBIÓR WINE\n\n"
+        + table.to_string(index=False, float_format=lambda value: f"{value:.4f}")
+        + f"\n\nFoldy scikit-learn: {np.round(sklearn_scores, 4)}"
+        + f"\nFoldy PyTorch:      {np.round(torch_scores, 4)}\n"
+    )
+    results_path = ROOT / "results" / "wyniki.txt"
+    results_path.parent.mkdir(exist_ok=True)
+    results_path.write_text(report, encoding="utf-8")
+    return table, report
+
+
 def main():
     dataset, X, y, (X_train, X_test, y_train, y_test) = load_data()
     print(f"Zbiór: Wine, klasy: {list(dataset.target_names)}")
     print(f"Cały zbiór: {X.shape}")
     print(f"Trening: {X_train.shape}, test: {X_test.shape}")
 
-    _, _, sklearn_accuracy, sklearn_time = train_sklearn(
+    _, sklearn_predictions, sklearn_accuracy, sklearn_time = train_sklearn(
         X_train, X_test, y_train, y_test
     )
     print(
@@ -153,7 +176,7 @@ def main():
         f"czas: {sklearn_time:.4f} s"
     )
 
-    _, _, _, torch_accuracy, torch_time = train_torch(
+    _, _, torch_predictions, torch_accuracy, torch_time = train_torch(
         X_train, X_test, y_train, y_test
     )
     print(
@@ -168,6 +191,37 @@ def main():
     torch_scores, torch_mean, torch_std = validate_torch(X, y)
     print(f"PyTorch CV: {np.round(torch_scores, 4)}")
     print(f"Średnia: {torch_mean:.4f}, odchylenie: {torch_std:.4f}")
+
+    sklearn_precision, sklearn_recall, sklearn_f1 = metric_summary(
+        y_test, sklearn_predictions
+    )
+    torch_precision, torch_recall, torch_f1 = metric_summary(
+        y_test, torch_predictions
+    )
+    rows = [
+        {
+            "Model": "scikit-learn",
+            "Test accuracy": sklearn_accuracy,
+            "Precision": sklearn_precision,
+            "Recall": sklearn_recall,
+            "F1": sklearn_f1,
+            "CV mean": sklearn_mean,
+            "CV std": sklearn_std,
+            "Training [s]": sklearn_time,
+        },
+        {
+            "Model": "PyTorch",
+            "Test accuracy": torch_accuracy,
+            "Precision": torch_precision,
+            "Recall": torch_recall,
+            "F1": torch_f1,
+            "CV mean": torch_mean,
+            "CV std": torch_std,
+            "Training [s]": torch_time,
+        },
+    ]
+    _, report = save_comparison(rows, sklearn_scores, torch_scores)
+    print("\n" + report)
 
 
 if __name__ == "__main__":
