@@ -7,7 +7,7 @@ from torch import nn
 from sklearn.datasets import load_wine
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import KFold, cross_val_score, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -106,6 +106,15 @@ def train_torch(X_train, X_test, y_train, y_test, epochs=EPOCHS, seed=SEED):
     return model, scaler, predictions, accuracy, training_time
 
 
+def validate_sklearn(X, y):
+    """Uruchamia 5-krotną walidację krzyżową Pipeline'u."""
+    folds = KFold(n_splits=5, shuffle=True, random_state=SEED)
+    scores = cross_val_score(
+        build_sklearn_model(), X, y, cv=folds, scoring="accuracy"
+    )
+    return scores, scores.mean(), scores.std()
+
+
 def main():
     dataset, X, y, (X_train, X_test, y_train, y_test) = load_data()
     print(f"Zbiór: Wine, klasy: {list(dataset.target_names)}")
@@ -127,6 +136,10 @@ def main():
         f"PyTorch - accuracy: {torch_accuracy:.4f}, "
         f"czas: {torch_time:.4f} s"
     )
+
+    sklearn_scores, sklearn_mean, sklearn_std = validate_sklearn(X, y)
+    print(f"scikit-learn CV: {np.round(sklearn_scores, 4)}")
+    print(f"Średnia: {sklearn_mean:.4f}, odchylenie: {sklearn_std:.4f}")
 
 
 if __name__ == "__main__":
