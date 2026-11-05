@@ -115,6 +115,30 @@ def validate_sklearn(X, y):
     return scores, scores.mean(), scores.std()
 
 
+def validate_torch(X, y):
+    """Ręcznie trenuje nową sieć dla każdego z pięciu foldów."""
+    folds = KFold(n_splits=5, shuffle=True, random_state=SEED)
+    scores = []
+    for fold_number, (train_indices, test_indices) in enumerate(folds.split(X), 1):
+        X_fold_train = X.iloc[train_indices]
+        X_fold_test = X.iloc[test_indices]
+        y_fold_train = y.iloc[train_indices]
+        y_fold_test = y.iloc[test_indices]
+
+        # Każdy fold otrzymuje nową sieć z nowymi wagami.
+        _, _, _, accuracy, _ = train_torch(
+            X_fold_train,
+            X_fold_test,
+            y_fold_train,
+            y_fold_test,
+            seed=SEED + fold_number,
+        )
+        scores.append(accuracy)
+
+    scores = np.array(scores)
+    return scores, scores.mean(), scores.std()
+
+
 def main():
     dataset, X, y, (X_train, X_test, y_train, y_test) = load_data()
     print(f"Zbiór: Wine, klasy: {list(dataset.target_names)}")
@@ -140,6 +164,10 @@ def main():
     sklearn_scores, sklearn_mean, sklearn_std = validate_sklearn(X, y)
     print(f"scikit-learn CV: {np.round(sklearn_scores, 4)}")
     print(f"Średnia: {sklearn_mean:.4f}, odchylenie: {sklearn_std:.4f}")
+
+    torch_scores, torch_mean, torch_std = validate_torch(X, y)
+    print(f"PyTorch CV: {np.round(torch_scores, 4)}")
+    print(f"Średnia: {torch_mean:.4f}, odchylenie: {torch_std:.4f}")
 
 
 if __name__ == "__main__":
